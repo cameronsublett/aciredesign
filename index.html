@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ACI Syllabus Redesign Guide — CTE Futures</title>
+  <meta name="description" content="An interactive, AI-powered guide for community college faculty to redesign CTE courses using the Applied Co-Intelligence framework." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.5/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    button { font-family: inherit; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media print {
+      .no-print { display: none !important; }
+    }
+    .step-label { display: none; }
+    @media(min-width:640px) { .step-label { display: inline; } }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // ─── CONFIG ──────────────────────────────────────────
+    // For the AI features to work, you need an Anthropic API key.
+    // IMPORTANT: For production, use a backend proxy instead of exposing the key here.
+    const ANTHROPIC_API_KEY = ""; // paste key here for testing only
+
+    // ─── CONSTANTS ───────────────────────────────────────
+    const BRAND = {
+      primary: "#3B5B66",
+      primaryLight: "#7FA69E",
+      accent: "#3B5B66",
+      accentLight: "#DDE6DD",
+      surface: "#FAF5ED",
+      surfaceAlt: "#DDE6DD",
+      text: "#2A2A2A",
+      textMuted: "#5C6660",
+      textLight: "#8A9490",
+      white: "#FFFFFF",
+      success: "#4A7A60",
+      successLight: "#E4F0E8",
+      border: "#C8D2CC",
+    };
+
+    const STEPS = [
+      { key: "welcome", label: "Welcome" },
+      { key: "course", label: "Your Course" },
+      { key: "audit", label: "Course Audit" },
+      { key: "outcomes", label: "Outcomes & Assignments" },
+      { key: "modality", label: "Modality & Syllabus" },
+      { key: "rubric", label: "Self-Assessment" },
+      { key: "plan", label: "Action Plan" },
+    ];
+
+    const MODALITIES = ["Face-to-Face", "Hybrid", "Fully Online"];
+    const LEVELS = ["Introductory", "Mid-Program", "Advanced / Capstone"];
+    const CLUSTERS = [
+      "Agriculture, Food & Natural Resources","Architecture & Construction",
+      "Arts, A/V Technology & Communication","Business Management & Administration",
+      "Education & Training","Finance","Health Science","Hospitality & Tourism",
+      "Human Services","Information Technology","Law, Public Safety & Security",
+      "Manufacturing","Marketing, Sales & Service",
+      "Science, Technology, Engineering & Math","Supply Chain & Transportation","Other",
+    ];
+
+    const EXAMPLE_COURSES = [
+      {
+        title: "Introduction to Nursing Assisting (CNA Preparation)",
+        cluster: "Health Science", level: "Introductory", modality: "Hybrid",
+        description: "This course prepares students for the Certified Nursing Assistant (CNA) certification exam. Students develop foundational clinical skills including patient intake, vital signs, mobility assistance, hygiene care, and medical documentation. The course includes classroom instruction, skills lab sessions, and supervised clinical rotations in long-term care facilities.",
+        currentAI: "We haven't formally integrated AI yet. Some students use ChatGPT to study for exams on their own. Our simulation lab has some newer equipment but we haven't explored AI-powered features.",
+      },
+      {
+        title: "Digital Design and Visual Communication",
+        cluster: "Arts, A/V Technology & Communication", level: "Mid-Program", modality: "Face-to-Face",
+        description: "Students develop professional graphic design skills using industry-standard tools including Adobe Creative Suite. The course covers visual communication principles, typography, branding, layout design, and portfolio development. Students complete client-based projects and build a professional portfolio.",
+        currentAI: "Students are already experimenting with Midjourney and DALL-E for ideation. I've allowed some AI image generation in early concept phases but I'm unsure how to assess it or where to draw lines.",
+      },
+      {
+        title: "Automotive Diagnostics and Engine Performance",
+        cluster: "Supply Chain & Transportation", level: "Advanced / Capstone", modality: "Face-to-Face",
+        description: "This capstone course prepares students for ASE certification in engine performance diagnostics. Students use OBD-II scanners, oscilloscopes, and diagnostic software to identify and resolve complex engine and drivetrain issues. The course emphasizes systematic diagnostic procedures, electrical system analysis, fuel and emissions systems, and customer communication.",
+        currentAI: "Our diagnostic scan tools have some 'guided diagnostics' features powered by AI that suggest probable causes based on trouble codes and sensor data. I haven't formally taught students how to evaluate those suggestions vs. their own diagnostic reasoning.",
+      },
+    ];
+
+    const RUBRIC_DIMS = [
+      { key: "outcomes", label: "Learning Outcomes", levels: [
+        "Outcomes address technical skills only. AI and transferable skills are absent.",
+        "One or two outcomes mention AI or transferable skills, but separately from technical outcomes.",
+        "Outcomes integrate at least two of three ACI spheres. AI mastery is addressed at an appropriate continuum level.",
+        "Outcomes reflect all three ACI spheres, calibrated to course level. Transferable skills are explicit and grounded in occupational context.",
+      ]},
+      { key: "assignments", label: "Assignment Design", levels: [
+        "Assignments are exclusively technical. AI is either banned or unaddressed.",
+        "One or two assignments involve AI, but use is generic or superficial.",
+        "Multiple assignments integrate AI in occupation-specific ways with at least one human-override moment.",
+        "Assignments sequenced along the AI Mastery Continuum. Every major assignment integrates all three spheres with documented AI reflection.",
+      ]},
+      { key: "policy", label: "AI Policy & Syllabus Language", levels: [
+        "Syllabus does not mention AI, or includes only a blanket ban/allow.",
+        "General AI policy, not connected to the profession or activities.",
+        "AI expectations described by assignment. Occupation-specific tools are named.",
+        "Progressive AI continuum articulated, with tools named, documentation expected, and professional readiness connected.",
+      ]},
+      { key: "modalityScore", label: "Modality & AI Integration", levels: [
+        "AI integration is not adapted to course modality.",
+        "Some AI activities exist but don't leverage the modality's strengths.",
+        "AI integration adapted to modality. In-person prioritizes hands-on use; online includes structured activities.",
+        "Modality leveraged strategically. Activities bridge modes. Equity and access addressed. Instructor models AI use.",
+      ]},
+      { key: "assessment", label: "Assessment & Improvement", levels: [
+        "Assessment limited to technical skills. No AI feedback collected.",
+        "Some AI competency assessed informally. Feedback not systematic.",
+        "AI competency formally assessed. Student feedback collected and informs revision.",
+        "All three ACI spheres reflected in assessment. Feedback loops include students, colleagues, and industry advisors.",
+      ]},
+    ];
+
+    const AUDIT_ITEMS = [
+      "I have mapped each learning outcome to the three ACI skill spheres",
+      "I have inventoried my assignments and identified which skill spheres each develops",
+      "I have identified assignments that AI could complete entirely (redesign signals)",
+      "I have scanned my industry for current and emerging AI tools and practices",
+      "I have identified at least three points where AI integration could deepen learning",
+      "I have talked to at least one practitioner about AI use in the field",
+    ];
+
+    // ─── API ─────────────────────────────────────────────
+    const ACI_SYS = `You are an expert in Career and Technical Education (CTE) curriculum design and the Applied Co-Intelligence (ACI) framework from the report by Cameron Sublett et al. (2026). The ACI model integrates three skill spheres within an occupational context:
+1. Technical Skills — occupation-specific, credential-bearing skills
+2. Transferable Skills — durable human capabilities (critical thinking, ethics, empathy, teamwork, communication)
+3. AI Mastery — a continuum: AI Literacy (basic awareness/use) → AI Fluency (industry-specific application) → AI Agency (strategic evaluation and selection) → AI Mastery (critique and adaptation of AI systems)
+Core principle: AI skills must be integrated into existing CTE instruction, not taught as stand-alone courses. Respond with practical, specific, actionable recommendations. Use plain language. Do not use markdown headers or bold. Use short paragraphs and numbered lists where helpful. Keep responses focused and under 500 words.`;
+
+    async function askAI(userPrompt) {
+      if (!ANTHROPIC_API_KEY) {
+        return "AI recommendations require an API key. To enable this feature, add your Anthropic API key in the configuration at the top of the HTML file. For production use, set up a backend proxy to keep your key secure.";
+      }
+      try {
+        const res = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
+            "anthropic-dangerous-direct-browser-access": "true",
+          },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-6",
+            max_tokens: 1000,
+            system: ACI_SYS,
+            messages: [{ role: "user", content: userPrompt }],
+          }),
+        });
+        const d = await res.json();
+        return d.content?.filter(b => b.type === "text").map(b => b.text).join("\n") || "Unable to generate. Please try again.";
+      } catch(e) { return "Unable to connect. Please check your API key and try again."; }
+    }
+
+    // ─── STORAGE (localStorage for standalone) ───────────
+    const STORAGE_KEY = "aci-guide-progress";
+    function saveProgress(state) {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e) {}
+    }
+    function loadProgress() {
+      try { const d = localStorage.getItem(STORAGE_KEY); return d ? JSON.parse(d) : null; } catch { return null; }
+    }
+    function clearProgress() {
+      try { localStorage.removeItem(STORAGE_KEY); } catch {}
+    }
+
+    // ─── SHARED UI ───────────────────────────────────────
+    const sty = {
+      btn: (variant) => ({
+        padding: "10px 20px", borderRadius: "8px", fontSize: "14px", fontWeight: 600,
+        border: "none", cursor: "pointer", transition: "all 0.2s",
+        ...(variant === "primary" ? { background: BRAND.primary, color: BRAND.white } :
+           variant === "accent" ? { background: BRAND.primaryLight, color: BRAND.white } :
+           variant === "ghost" ? { background: "transparent", color: BRAND.primary, border: "1px solid " + BRAND.border } :
+           { background: BRAND.white, color: BRAND.primary, border: "1px solid " + BRAND.border }),
+      }),
+      card: { background: BRAND.white, borderRadius: "12px", border: "1px solid " + BRAND.border, padding: "24px" },
+      input: { width: "100%", padding: "10px 14px", borderRadius: "8px", border: "1px solid " + BRAND.border, fontSize: "14px", fontFamily: "inherit", boxSizing: "border-box", outline: "none" },
+      label: { display: "block", fontSize: "13px", fontWeight: 600, color: BRAND.text, marginBottom: "6px" },
+      muted: { fontSize: "13px", color: BRAND.textMuted, lineHeight: "1.5" },
+      h2: { fontSize: "26px", fontWeight: 700, color: BRAND.primary, margin: "0 0 6px", fontFamily: "'Georgia', serif" },
+    };
+
+    function Spinner() {
+      return React.createElement("div", { style: { display: "flex", alignItems: "center", gap: "12px", padding: "24px", justifyContent: "center", color: BRAND.primaryLight }},
+        React.createElement("svg", { width: 20, height: 20, viewBox: "0 0 24 24", fill: "none", style: { animation: "spin 1s linear infinite" }},
+          React.createElement("circle", { cx: 12, cy: 12, r: 10, stroke: "currentColor", strokeWidth: 4, opacity: 0.25 }),
+          React.createElement("path", { d: "M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z", fill: "currentColor", opacity: 0.75 })
+        ),
+        React.createElement("span", { style: { fontSize: "13px", fontWeight: 500 }}, "Generating personalized recommendations...")
+      );
+    }
+
+    function AIBox({ text }) {
+      if (!text) return null;
+      return (
+        <div style={{ background: "#F0F4F5", border: "1px solid #C8D8DC", borderRadius: "12px", padding: "20px", marginTop: "16px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+            <div style={{ width: "24px", height: "24px", borderRadius: "50%", background: BRAND.primary, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span style={{ color: BRAND.white, fontSize: "10px", fontWeight: 700 }}>AI</span>
+            </div>
+            <span style={{ fontSize: "11px", fontWeight: 700, color: BRAND.primaryLight, textTransform: "uppercase", letterSpacing: "0.5px" }}>Personalized Recommendations</span>
+          </div>
+          <div style={{ fontSize: "13px", color: BRAND.text, lineHeight: "1.65", whiteSpace: "pre-wrap" }}>{text}</div>
+        </div>
+      );
+    }
+
+    function StepBar({ step, setStep }) {
+      return (
+        <div className="no-print" style={{ display: "flex", gap: "4px", marginBottom: "32px", overflowX: "auto", paddingBottom: "4px" }}>
+          {STEPS.map((st, i) => (
+            <button key={st.key} onClick={() => setStep(i)} style={{
+              display: "flex", alignItems: "center", gap: "6px", padding: "8px 12px", borderRadius: "8px",
+              border: "none", cursor: "pointer", fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap",
+              fontFamily: "inherit", transition: "all 0.2s",
+              background: i === step ? BRAND.primary : i < step ? "#E0EDF0" : BRAND.surfaceAlt,
+              color: i === step ? BRAND.white : i < step ? BRAND.primary : BRAND.textLight,
+            }}>
+              <span style={{
+                width: "20px", height: "20px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: "10px", fontWeight: 700,
+                background: i === step ? "rgba(255,255,255,0.2)" : i < step ? BRAND.primary : BRAND.border,
+                color: i <= step ? BRAND.white : BRAND.textLight,
+              }}>{i < step ? "✓" : i + 1}</span>
+              <span className="step-label">{st.label}</span>
+            </button>
+          ))}
+        </div>
+      );
+    }
+
+    function Nav({ onBack, onNext, nextLabel, nextDisabled }) {
+      return (
+        <div className="no-print" style={{ display: "flex", justifyContent: "space-between", marginTop: "28px" }}>
+          {onBack ? <button onClick={onBack} style={sty.btn("ghost")}>← Back</button> : <div />}
+          {onNext && <button onClick={onNext} disabled={nextDisabled} style={{ ...sty.btn("primary"), opacity: nextDisabled ? 0.4 : 1 }}>{nextLabel || "Continue →"}</button>}
+        </div>
+      );
+    }
+
+    // ─── WELCOME ─────────────────────────────────────────
+    function Welcome({ onNext, onLoadExample, hasSaved, onResume }) {
+      return (
+        <div style={{ maxWidth: "640px", margin: "0 auto", textAlign: "center" }}>
+          <div style={{ marginBottom: "32px" }}>
+            <div style={{ fontSize: "12px", fontWeight: 700, letterSpacing: "2px", color: BRAND.primaryLight, textTransform: "uppercase", marginBottom: "12px" }}>CTE Futures</div>
+            <h1 style={{ fontSize: "32px", fontWeight: 700, color: BRAND.primary, lineHeight: 1.2, margin: "0 0 12px", fontFamily: "'Georgia', serif" }}>
+              Redesign Your Course for<br />Applied Co-Intelligence
+            </h1>
+            <p style={{ ...sty.muted, maxWidth: "480px", margin: "0 auto" }}>
+              A guided, AI-powered tool for community college faculty ready to integrate AI mastery into their CTE courses.
+            </p>
+          </div>
+          <div style={sty.card}>
+            <div style={{ textAlign: "left" }}>
+              <p style={{ ...sty.muted, marginBottom: "16px" }}>Walk through a step-by-step course redesign grounded in the Applied Co-Intelligence framework. You'll audit your course, reshape outcomes and assignments, craft syllabus language, score yourself on an alignment rubric, and receive AI-powered recommendations personalized to your discipline.</p>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "12px" }}>
+                {[{ icon: "🔍", t: "Audit & Assess", d: "Map your course against the three ACI skill spheres" },
+                  { icon: "🤖", t: "AI-Powered Guidance", d: "Get recommendations tailored to your discipline" },
+                  { icon: "📋", t: "Action Plan", d: "Leave with a concrete, personalized plan" }
+                ].map(f => (
+                  <div key={f.t} style={{ background: BRAND.surface, borderRadius: "8px", padding: "14px", textAlign: "left" }}>
+                    <div style={{ fontSize: "20px", marginBottom: "6px" }}>{f.icon}</div>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: BRAND.text }}>{f.t}</div>
+                    <div style={{ fontSize: "12px", color: BRAND.textMuted, marginTop: "4px" }}>{f.d}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div style={{ ...sty.card, marginTop: "16px", background: BRAND.surfaceAlt, border: "1px solid " + BRAND.border, textAlign: "left" }}>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: BRAND.primary, marginBottom: "8px" }}>The ACI Framework</div>
+            <p style={{ fontSize: "13px", color: BRAND.text, lineHeight: "1.5", margin: "0 0 12px" }}>Applied Co-Intelligence sits at the intersection of Technical Skills, Transferable Skills, and AI Mastery — all grounded within a specific occupational context.</p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+              {["Literacy", "Fluency", "Agency", "Mastery"].map((l, i) => (
+                <span key={l} style={{ fontSize: "11px", fontWeight: 600, padding: "4px 10px", borderRadius: "20px", background: BRAND.white, color: BRAND.primary, border: "1px solid " + BRAND.border }}>{i + 1}. AI {l}</span>
+              ))}
+            </div>
+          </div>
+          <div style={{ marginTop: "24px", display: "flex", flexDirection: "column", gap: "10px", alignItems: "center" }}>
+            {hasSaved && <button onClick={onResume} style={{ ...sty.btn("accent"), width: "260px" }}>Resume Saved Progress</button>}
+            <button onClick={onNext} style={{ ...sty.btn("primary"), width: "260px" }}>Start Fresh →</button>
+          </div>
+          <div style={{ marginTop: "24px" }}>
+            <div style={{ fontSize: "12px", color: BRAND.textMuted, marginBottom: "10px", fontWeight: 600 }}>Or explore an example course:</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", justifyContent: "center" }}>
+              {EXAMPLE_COURSES.map((ex, i) => (
+                <button key={i} onClick={() => onLoadExample(ex)} style={{ ...sty.btn("ghost"), fontSize: "12px", padding: "6px 14px" }}>
+                  {["🩺 CNA", "🎨 Graphic Design", "🔧 Automotive"][i]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p style={{ fontSize: "11px", color: BRAND.textLight, marginTop: "20px" }}>Based on <em>Applied Co-Intelligence</em> (Sublett, Mason, Fresard, & Rimbach-Jones, 2026)</p>
+        </div>
+      );
+    }
+
+    // ─── COURSE PROFILE ──────────────────────────────────
+    function CourseStep({ profile, setProfile, onNext, onBack }) {
+      const u = (k, v) => setProfile(p => ({ ...p, [k]: v }));
+      const ok = profile.title && profile.cluster && profile.level && profile.modality && profile.description;
+      return (
+        <div style={{ maxWidth: "640px", margin: "0 auto" }}>
+          <h2 style={sty.h2}>Tell us about your course</h2>
+          <p style={{ ...sty.muted, marginBottom: "20px" }}>This information personalizes every recommendation and your final action plan.</p>
+          <div style={{ ...sty.card, display: "flex", flexDirection: "column", gap: "18px" }}>
+            <div><label style={sty.label}>Course Title</label><input value={profile.title} onChange={e => u("title", e.target.value)} placeholder="e.g., Introduction to Medical Assisting" style={sty.input} /></div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+              <div><label style={sty.label}>CTE Career Cluster</label><select value={profile.cluster} onChange={e => u("cluster", e.target.value)} style={{ ...sty.input, background: BRAND.white }}><option value="">Select</option>{CLUSTERS.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+              <div><label style={sty.label}>Course Level</label><div style={{ display: "flex", gap: "4px" }}>{LEVELS.map(l => <button key={l} onClick={() => u("level", l)} style={{ flex: 1, padding: "9px 4px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, border: "1.5px solid " + (profile.level === l ? BRAND.primary : BRAND.border), background: profile.level === l ? BRAND.primary : BRAND.white, color: profile.level === l ? BRAND.white : BRAND.textMuted, cursor: "pointer", fontFamily: "inherit" }}>{l.split(" / ")[0]}</button>)}</div></div>
+            </div>
+            <div><label style={sty.label}>Modality</label><div style={{ display: "flex", gap: "6px" }}>{MODALITIES.map(m => <button key={m} onClick={() => u("modality", m)} style={{ flex: 1, padding: "10px", borderRadius: "6px", fontSize: "13px", fontWeight: 600, border: "1.5px solid " + (profile.modality === m ? BRAND.primary : BRAND.border), background: profile.modality === m ? BRAND.primary : BRAND.white, color: profile.modality === m ? BRAND.white : BRAND.textMuted, cursor: "pointer", fontFamily: "inherit" }}>{m}</button>)}</div></div>
+            <div><label style={sty.label}>Course description and target occupation(s)</label><textarea value={profile.description} onChange={e => u("description", e.target.value)} rows={4} placeholder="What do students learn? What credentials or skills do they develop?" style={{ ...sty.input, resize: "vertical" }} /></div>
+            <div><label style={sty.label}>Current AI integration (optional)</label><textarea value={profile.currentAI} onChange={e => u("currentAI", e.target.value)} rows={2} placeholder="e.g., Not at all yet / Students use ChatGPT informally..." style={{ ...sty.input, resize: "vertical" }} /></div>
+          </div>
+          <Nav onBack={onBack} onNext={onNext} nextDisabled={!ok} />
+        </div>
+      );
+    }
+
+    // ─── AUDIT ───────────────────────────────────────────
+    function AuditStep({ checks, setChecks, profile, onNext, onBack }) {
+      const [ai, setAi] = useState(null);
+      const [loading, setLoading] = useState(false);
+      const toggle = i => setChecks(c => { const n = [...c]; n[i] = !n[i]; return n; });
+      const done = checks.filter(Boolean).length;
+      const analyze = async () => {
+        setLoading(true);
+        const t = await askAI(`A community college faculty member teaches "${profile.title}" in ${profile.cluster} (${profile.level}, ${profile.modality}). Description: "${profile.description}". Current AI: "${profile.currentAI || "None"}". Provide a concise ACI gap analysis: 1. What AI tools/technologies are most relevant to this specific occupation right now? 2. Where are the strongest opportunities to integrate AI Fluency and Agency? 3. What transferable skills matter most for this occupation in an AI-augmented workplace? 4. Name 2-3 specific "redesign signals." Be specific to their occupation.`);
+        setAi(t); setLoading(false);
+      };
+      return (
+        <div style={{ maxWidth: "640px", margin: "0 auto" }}>
+          <h2 style={sty.h2}>Audit your current course</h2>
+          <p style={{ ...sty.muted, marginBottom: "20px" }}>Take stock of where your course stands today, then get an AI-powered gap analysis.</p>
+          <div style={sty.card}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "14px" }}><span style={{ fontSize: "13px", fontWeight: 700, color: BRAND.text }}>Audit Checklist</span><span style={{ fontSize: "12px", color: BRAND.textLight }}>{done} of {AUDIT_ITEMS.length}</span></div>
+            {AUDIT_ITEMS.map((item, i) => (
+              <label key={i} onClick={() => toggle(i)} style={{ display: "flex", alignItems: "flex-start", gap: "10px", padding: "8px 0", cursor: "pointer" }}>
+                <div style={{ width: "20px", height: "20px", borderRadius: "4px", flexShrink: 0, marginTop: "1px", border: "2px solid " + (checks[i] ? BRAND.primary : BRAND.border), background: checks[i] ? BRAND.primary : BRAND.white, display: "flex", alignItems: "center", justifyContent: "center", color: BRAND.white, fontSize: "12px", transition: "all 0.15s" }}>{checks[i] && "✓"}</div>
+                <span style={{ fontSize: "13px", color: checks[i] ? BRAND.textLight : BRAND.text, textDecoration: checks[i] ? "line-through" : "none" }}>{item}</span>
+              </label>
+            ))}
+            {done === AUDIT_ITEMS.length && <div style={{ marginTop: "12px", padding: "10px", background: BRAND.successLight, borderRadius: "8px", fontSize: "13px", color: BRAND.success, fontWeight: 600 }}>Audit complete — you're ready to move forward.</div>}
+          </div>
+          <div style={{ ...sty.card, marginTop: "16px" }}>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: BRAND.text, marginBottom: "4px" }}>Personalized gap analysis</div>
+            <p style={{ fontSize: "12px", color: BRAND.textMuted, marginBottom: "14px" }}>Based on your course profile, AI will identify relevant tools, integration opportunities, and redesign signals.</p>
+            {loading ? <Spinner /> : <button onClick={analyze} style={sty.btn(ai ? "ghost" : "primary")}>{ai ? "Regenerate" : "Analyze My Course"}</button>}
+            <AIBox text={ai} />
+          </div>
+          <Nav onBack={onBack} onNext={onNext} />
+        </div>
+      );
+    }
+
+    // ─── OUTCOMES & ASSIGNMENTS ──────────────────────────
+    function OutcomesStep({ profile, onNext, onBack }) {
+      const [oi, setOi] = useState("");
+      const [aoRes, setAoRes] = useState(null); const [aaRes, setAaRes] = useState(null);
+      const [lo, setLo] = useState(false); const [la, setLa] = useState(false);
+      const genOutcomes = async () => { setLo(true); const t = await askAI(`Faculty teaches "${profile.title}" (${profile.cluster}, ${profile.level}, ${profile.modality}). Description: "${profile.description}". ${oi ? `Current outcomes:\n"${oi}"\nRevise these to be ACI-aligned. For each, show the revised version integrating AI mastery and/or transferable skills while preserving technical focus. Then suggest 1-2 additional outcomes.` : `Suggest 4-5 ACI-aligned learning outcomes. Each should integrate technical skills with AI mastery and/or transferable skills. Calibrate AI mastery to "${profile.level}".`} Be specific to the occupation. Use action verbs. Make each measurable.`); setAoRes(t); setLo(false); };
+      const genAssignments = async () => { setLa(true); const t = await askAI(`Faculty teaches "${profile.title}" (${profile.cluster}, ${profile.level}, ${profile.modality}). Description: "${profile.description}". Design 4 ACI-aligned assignments sequenced along the AI Mastery Continuum. For each: title, continuum level, 2-3 sentence description, the "human override" moment, which transferable skill(s) it develops. Include at least one using an occupation-specific AI tool (not just ChatGPT).`); setAaRes(t); setLa(false); };
+      return (
+        <div style={{ maxWidth: "640px", margin: "0 auto" }}>
+          <h2 style={sty.h2}>Outcomes & assignments</h2>
+          <p style={{ ...sty.muted, marginBottom: "20px" }}>Reshape your learning outcomes and assignments so technical skills, transferable skills, and AI mastery reinforce one another.</p>
+          <div style={sty.card}>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: BRAND.text, marginBottom: "4px" }}>Learning outcomes</div>
+            <p style={{ fontSize: "12px", color: BRAND.textMuted, marginBottom: "10px" }}>Paste current outcomes for ACI-aligned revisions, or generate new ones from scratch.</p>
+            <textarea value={oi} onChange={e => setOi(e.target.value)} rows={4} placeholder="Paste your current course learning outcomes here, or leave blank..." style={{ ...sty.input, resize: "vertical", marginBottom: "10px" }} />
+            {lo ? <Spinner /> : <button onClick={genOutcomes} style={sty.btn(aoRes ? "ghost" : "primary")}>{oi ? "Revise My Outcomes" : "Generate ACI Outcomes"}</button>}
+            <AIBox text={aoRes} />
+          </div>
+          <div style={{ ...sty.card, marginTop: "16px" }}>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: BRAND.text, marginBottom: "4px" }}>Assignment design</div>
+            <p style={{ fontSize: "12px", color: BRAND.textMuted, marginBottom: "12px" }}>Get assignment ideas sequenced along the AI Mastery Continuum, each with a built-in human-override moment.</p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "14px" }}>
+              {["Literacy","Fluency","Agency","Mastery"].map((l,i) => <span key={l} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", fontWeight: 600, padding: "4px 10px", borderRadius: "6px", background: BRAND.surface, color: BRAND.textMuted }}><span style={{ width: "8px", height: "8px", borderRadius: "50%", background: ["#3B9EBF","#2C5F6E","#7B4DAA","#C4427A"][i] }} />AI {l}</span>)}
+            </div>
+            {la ? <Spinner /> : <button onClick={genAssignments} style={sty.btn(aaRes ? "ghost" : "primary")}>{aaRes ? "Regenerate" : "Generate Assignment Ideas"}</button>}
+            <AIBox text={aaRes} />
+          </div>
+          <div style={{ ...sty.card, marginTop: "16px", background: BRAND.surfaceAlt, border: "1px solid " + BRAND.border }}>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: BRAND.primary, marginBottom: "6px" }}>Design principle</div>
+            <p style={{ fontSize: "12px", color: BRAND.text, lineHeight: "1.5", margin: 0 }}>An ACI-aligned course does not ban AI or ignore it. It structures AI use so students develop progressively deeper competency. The question is never "Did the student use AI?" but "Can the student demonstrate professional judgment about how, when, and whether to use AI — and can they evaluate the results?"</p>
+          </div>
+          <Nav onBack={onBack} onNext={onNext} />
+        </div>
+      );
+    }
+
+    // ─── MODALITY & SYLLABUS ─────────────────────────────
+    function ModalityStep({ profile, onNext, onBack }) {
+      const [ai, setAi] = useState(null); const [loading, setLoading] = useState(false);
+      const tips = {
+        "Face-to-Face": ["Model your own AI use live — narrate your decision-making as you accept, modify, or reject AI output","Use lab/shop time for AI Fluency and Agency activities with immediate hands-on follow-through","Design activities where students compare AI suggestions to what actually works in practice"],
+        "Hybrid": ["Reserve face-to-face time for simulations, collaborative problem-solving, and ethical case discussions","Use online time for AI Literacy and Fluency building — tutorials, guided exploration, reflective documentation","Design bridge assignments: students prepare AI-assisted work online, then present/defend/execute it in person"],
+        "Fully Online": ["Structure AI use explicitly in each module — don't rely on a general syllabus statement","Use video/screen capture for 'show your work' assignments where students narrate their AI decisions","Address equity directly — ensure required AI tools are free or institutionally provided"],
+      };
+      const genSyllabus = async () => { setLoading(true); const t = await askAI(`Faculty teaches "${profile.title}" (${profile.cluster}, ${profile.level}, ${profile.modality}). Description: "${profile.description}". Generate syllabus language for: 1. AI USE POLICY, 2. AI TOOLS IN THIS COURSE (name 3-4 specific tools for ${profile.cluster}), 3. AI DOCUMENTATION EXPECTATION. Make language ready to paste into a syllabus. Use second person.`); setAi(t); setLoading(false); };
+      return (
+        <div style={{ maxWidth: "640px", margin: "0 auto" }}>
+          <h2 style={sty.h2}>Modality & syllabus language</h2>
+          <p style={{ ...sty.muted, marginBottom: "20px" }}>Guidance for your delivery mode, then generate personalized syllabus language.</p>
+          <div style={sty.card}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}><span style={{ fontSize: "13px", fontWeight: 700, color: BRAND.text }}>Tips for</span><span style={{ fontSize: "11px", fontWeight: 700, padding: "4px 10px", borderRadius: "20px", background: BRAND.primary, color: BRAND.white }}>{profile.modality}</span></div>
+            {(tips[profile.modality] || []).map((tip, i) => <div key={i} style={{ display: "flex", gap: "10px", padding: "10px", background: BRAND.surface, borderRadius: "8px", marginBottom: "6px" }}><span style={{ color: BRAND.primaryLight, fontWeight: 700 }}>→</span><span style={{ fontSize: "13px", color: BRAND.text, lineHeight: "1.5" }}>{tip}</span></div>)}
+          </div>
+          <div style={{ ...sty.card, marginTop: "16px" }}>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: BRAND.text, marginBottom: "4px" }}>Generate your AI syllabus language</div>
+            <p style={{ fontSize: "12px", color: BRAND.textMuted, marginBottom: "14px" }}>Get ready-to-paste syllabus sections personalized to your course.</p>
+            {loading ? <Spinner /> : <button onClick={genSyllabus} style={sty.btn(ai ? "ghost" : "primary")}>{ai ? "Regenerate" : "Generate My Syllabus Language"}</button>}
+            <AIBox text={ai} />
+          </div>
+          <Nav onBack={onBack} onNext={onNext} />
+        </div>
+      );
+    }
+
+    // ─── RUBRIC ──────────────────────────────────────────
+    function RubricStep({ rubric, setRubric, onNext, onBack }) {
+      const setScore = (k, v) => setRubric(r => ({ ...r, [k]: v }));
+      const scores = RUBRIC_DIMS.map(d => rubric[d.key] || 0);
+      const answered = scores.filter(s => s > 0).length;
+      const total = scores.reduce((a, b) => a + b, 0);
+      const allDone = answered === RUBRIC_DIMS.length;
+      const pct = allDone ? Math.round((total / 20) * 100) : 0;
+      const band = pct >= 80 ? "strong" : pct >= 55 ? "developing" : "emerging";
+      const bi = { strong: { label: "Strong ACI Alignment", bg: BRAND.successLight, color: BRAND.success }, developing: { label: "Developing Alignment", bg: "#EDF0F7", color: BRAND.primaryLight }, emerging: { label: "Emerging — Significant Opportunity", bg: "#F5F0E8", color: "#8B6B3E" }};
+      return (
+        <div style={{ maxWidth: "640px", margin: "0 auto" }}>
+          <h2 style={sty.h2}>Self-assessment rubric</h2>
+          <p style={{ ...sty.muted, marginBottom: "20px" }}>Rate your course honestly on each dimension. This feeds your personalized action plan.</p>
+          {RUBRIC_DIMS.map(dim => (
+            <div key={dim.key} style={{ ...sty.card, marginBottom: "12px" }}>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: BRAND.text, marginBottom: "10px" }}>{dim.label}</div>
+              {dim.levels.map((desc, i) => { const val = i + 1; const sel = rubric[dim.key] === val; return (
+                <button key={i} onClick={() => setScore(dim.key, val)} style={{ display: "flex", alignItems: "flex-start", gap: "10px", width: "100%", textAlign: "left", padding: "10px", borderRadius: "8px", marginBottom: "4px", cursor: "pointer", border: "1.5px solid " + (sel ? BRAND.primary : BRAND.border), background: sel ? "#EDF4F7" : BRAND.white, fontFamily: "inherit", transition: "all 0.15s" }}>
+                  <div style={{ width: "22px", height: "22px", borderRadius: "50%", flexShrink: 0, marginTop: "1px", border: "2px solid " + (sel ? BRAND.primary : BRAND.border), background: sel ? BRAND.primary : BRAND.white, display: "flex", alignItems: "center", justifyContent: "center", color: BRAND.white, fontSize: "11px", fontWeight: 700 }}>{val}</div>
+                  <span style={{ fontSize: "12px", color: sel ? BRAND.primary : BRAND.textMuted, fontWeight: sel ? 600 : 400, lineHeight: "1.4" }}>{desc}</span>
+                </button>
+              );})}
+            </div>
+          ))}
+          {allDone && <div style={{ ...sty.card, background: bi[band].bg, border: "1px solid " + bi[band].color + "22" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}><span style={{ fontSize: "14px", fontWeight: 700, color: bi[band].color }}>{bi[band].label}</span><span style={{ fontSize: "28px", fontWeight: 700, color: bi[band].color }}>{total}/20</span></div>
+            <div style={{ width: "100%", height: "8px", background: "rgba(0,0,0,0.08)", borderRadius: "4px" }}><div style={{ height: "8px", borderRadius: "4px", background: bi[band].color, width: pct + "%", transition: "width 0.3s" }} /></div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "6px", marginTop: "14px" }}>{RUBRIC_DIMS.map(d => <div key={d.key} style={{ textAlign: "center" }}><div style={{ fontSize: "18px", fontWeight: 700, color: (rubric[d.key]||0) <= 2 ? "#8B6B3E" : bi[band].color }}>{rubric[d.key]}</div><div style={{ fontSize: "10px", color: BRAND.textMuted }}>{d.label.split(" ")[0]}</div></div>)}</div>
+          </div>}
+          <Nav onBack={onBack} onNext={onNext} nextLabel={allDone ? "Generate My Action Plan →" : "Rate all " + RUBRIC_DIMS.length + " dimensions to continue"} nextDisabled={!allDone} />
+        </div>
+      );
+    }
+
+    // ─── ACTION PLAN ─────────────────────────────────────
+    function PlanStep({ profile, rubric, checks, onBack }) {
+      const [plan, setPlan] = useState(null); const [loading, setLoading] = useState(false);
+      const scores = RUBRIC_DIMS.map(d => ({ label: d.label, score: rubric[d.key] || 0 }));
+      const total = scores.reduce((a, b) => a + b.score, 0);
+      const weakest = [...scores].sort((a, b) => a.score - b.score).slice(0, 2);
+      const gen = async () => { setLoading(true); const t = await askAI(`Generate a personalized ACI action plan. COURSE: "${profile.title}" | ${profile.cluster} | ${profile.level} | ${profile.modality}. Description: "${profile.description}". Current AI: "${profile.currentAI || "None"}". RUBRIC SCORES (1-4): ${scores.map(s => s.label + ": " + s.score + "/4").join(", ")}. Total: ${total}/20. Weakest: ${weakest.map(w => w.label).join(", ")}. Create: 1. THIS SEMESTER (2-3 actions), 2. NEXT SEMESTER (2-3 actions), 3. PROGRAM-LEVEL CONVERSATION STARTERS (2 questions), 4. ONE BOLD MOVE. Be specific to ${profile.cluster}.`); setPlan(t); setLoading(false); };
+      return (
+        <div style={{ maxWidth: "640px", margin: "0 auto" }}>
+          <h2 style={sty.h2}>Your action plan</h2>
+          <p style={{ ...sty.muted, marginBottom: "20px" }}>Based on your course profile and self-assessment, here is your personalized roadmap.</p>
+          <div style={sty.card}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+              <div><div style={{ fontSize: "14px", fontWeight: 700, color: BRAND.text }}>{profile.title}</div><div style={{ fontSize: "12px", color: BRAND.textMuted }}>{profile.cluster} · {profile.level} · {profile.modality}</div></div>
+              <div style={{ textAlign: "right" }}><div style={{ fontSize: "28px", fontWeight: 700, color: BRAND.primary }}>{total}/20</div><div style={{ fontSize: "11px", color: BRAND.textMuted }}>rubric score</div></div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "4px" }}>{scores.map(sc => <div key={sc.label} style={{ textAlign: "center", background: BRAND.surface, borderRadius: "6px", padding: "8px 2px" }}><div style={{ fontSize: "16px", fontWeight: 700, color: sc.score <= 2 ? "#8B6B3E" : BRAND.primary }}>{sc.score}</div><div style={{ fontSize: "9px", color: BRAND.textMuted }}>{sc.label.split(" ")[0]}</div></div>)}</div>
+          </div>
+          {!plan && <div style={{ ...sty.card, marginTop: "16px", textAlign: "center" }}>{loading ? <Spinner /> : <><p style={{ ...sty.muted, marginBottom: "14px" }}>Ready to generate your personalized action plan.</p><button onClick={gen} style={sty.btn("accent")}>Generate My Action Plan</button></>}</div>}
+          {plan && <>
+            <AIBox text={plan} />
+            <div style={{ ...sty.card, marginTop: "16px", background: BRAND.surface }}>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: BRAND.text, marginBottom: "6px" }}>What's next</div>
+              <p style={{ fontSize: "12px", color: BRAND.textMuted, lineHeight: "1.5", marginBottom: "12px" }}>Save or print this page for reference. Revisit the self-assessment at the end of the semester. Share this tool with a colleague.</p>
+              <button onClick={() => window.print()} style={sty.btn("ghost")}>Print / Save as PDF</button>
+            </div>
+          </>}
+          <Nav onBack={onBack} />
+          <p style={{ textAlign: "center", fontSize: "11px", color: BRAND.textLight, marginTop: "28px" }}>Based on <em>Applied Co-Intelligence</em> (Sublett, Mason, Fresard, & Rimbach-Jones, 2026). A CTE Futures resource.</p>
+        </div>
+      );
+    }
+
+    // ─── MAIN ────────────────────────────────────────────
+    function ACIGuide() {
+      const [step, setStep] = useState(0);
+      const [profile, setProfile] = useState({ title: "", cluster: "", level: "", modality: "", description: "", currentAI: "" });
+      const [checks, setChecks] = useState(new Array(AUDIT_ITEMS.length).fill(false));
+      const [rubric, setRubric] = useState({});
+      const [hasSaved] = useState(() => !!loadProgress());
+      const saveTimer = useRef(null);
+
+      useEffect(() => {
+        if (step === 0) return;
+        if (saveTimer.current) clearTimeout(saveTimer.current);
+        saveTimer.current = setTimeout(() => saveProgress({ step, profile, checks, rubric }), 1500);
+        return () => clearTimeout(saveTimer.current);
+      }, [step, profile, checks, rubric]);
+
+      const resume = () => { const saved = loadProgress(); if (saved) { setProfile(saved.profile || profile); setChecks(saved.checks || checks); setRubric(saved.rubric || rubric); setStep(saved.step || 1); }};
+      const loadExample = (ex) => { setProfile({ ...ex }); setStep(1); };
+      const startFresh = () => { clearProgress(); setProfile({ title: "", cluster: "", level: "", modality: "", description: "", currentAI: "" }); setChecks(new Array(AUDIT_ITEMS.length).fill(false)); setRubric({}); setStep(1); };
+      const next = () => setStep(s => Math.min(s + 1, STEPS.length - 1));
+      const back = () => setStep(s => Math.max(s - 1, 0));
+
+      return (
+        <div style={{ minHeight: "100vh", background: BRAND.surface, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", padding: "24px 16px" }}>
+          <div style={{ maxWidth: "720px", margin: "0 auto" }}>
+            {step > 0 && <StepBar step={step} setStep={setStep} />}
+            {step === 0 && <Welcome onNext={startFresh} onLoadExample={loadExample} hasSaved={hasSaved} onResume={resume} />}
+            {step === 1 && <CourseStep profile={profile} setProfile={setProfile} onNext={next} onBack={back} />}
+            {step === 2 && <AuditStep checks={checks} setChecks={setChecks} profile={profile} onNext={next} onBack={back} />}
+            {step === 3 && <OutcomesStep profile={profile} onNext={next} onBack={back} />}
+            {step === 4 && <ModalityStep profile={profile} onNext={next} onBack={back} />}
+            {step === 5 && <RubricStep rubric={rubric} setRubric={setRubric} onNext={next} onBack={back} />}
+            {step === 6 && <PlanStep profile={profile} rubric={rubric} checks={checks} onBack={back} />}
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<ACIGuide />);
+  </script>
+</body>
+</html>
